@@ -11,13 +11,57 @@ local EXTRACT_CHAR_NAME_PATTERN = "%[GearCheck: ([^%s]+)%]"
 local EQUIPPED_ITEMS_ACTION = "EQUIPPED_ITEMS"
 local SAVED_VARIABLES_KEY = "GCWA_POINT"
 local GLOBAL_GEARCHECK_KEY = "GEARCHECK_WA"
+local REQUEST_THROTTLE_SEC = 5
 
 _G[GLOBAL_GEARCHECK_KEY] = {}
 local aura_addon = _G[GLOBAL_GEARCHECK_KEY]
 
 aura_addon.env = aura_env
 
+aura_addon.env.lastIncomingRequest = { }
+aura_addon.env.lastOutgoingRequest = { }
+aura_addon.env.requestedFrom = { }
+
 --- Utility Functions
+
+--- Updates the last incoming request from a character
+--- @param charFullName string The full name/realm of the character requesting data.
+local function updateLastIncomingRequest(charFullName)
+    local now = time()
+    aura_addon.env.lastIncomingRequest[charFullName] = now
+end
+
+--- Updates the last out request to a character
+--- @param charFullName string The full name/realm of the target character.
+local function updateLastOutgoingRequest(targetCharName)
+    local now = time()
+    print("Updating last outgoing request for target " .. targetCharName)
+    aura_addon.env.lastOutgoingRequest[targetCharName] = now
+end
+
+--- Checks if an incoming requester is outside of the throttling limit
+--- @param requesterFullName string The full name/realm of the character requesting data.
+--- @return boolean True/false if the requester is allowed to request data.
+local function requesterCanRequest(requesterFullName)
+    local now = time()
+    local lastRequested = aura_addon.env.lastIncomingRequest[requesterFullName]
+    if (lastRequested == nil) then
+        return true
+    end
+    return (now - lastRequested) > REQUEST_THROTTLE_SEC
+end
+
+--- Checks if an outgoing request is within the throttling limit to the target character
+--- @param requesterFullName string The full name/realm of the  target character.
+--- @return boolean True/false if the outgoing request should proceed.
+local function canRequestFromTarget(targetCharName)
+    local now = time()
+    local lastRequested = aura_addon.env.lastOutgoingRequest[targetCharName]
+    if (lastRequested == nil) then
+        return true
+    end
+    return (now - lastRequested) > REQUEST_THROTTLE_SEC
+end
 
 --- Log messages to DebugLog if it is installed
 --- @param data string String to log to DebugLog if it is installed
@@ -106,6 +150,8 @@ end
 --- @param characterName string Name/Realm of the character who should receive the request on the addon channel.
 local function requestPlayerEquippedItems(characterName)
     aura_addon.env:log("Requesting info from " .. characterName)
+    
+    -- check if we can request from this character
     aura_addon.env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION, "WHISPER", characterName)
 end
 
@@ -132,8 +178,15 @@ local function handleChatLinkClick(link, text)
         if (characterName == nil) then
             return
         end
-        -- Request equipment info
-        requestPlayerEquippedItems(characterName)
+        -- Are we clicking the same link too quickly?
+        local shouldRequest = canRequestFromTarget(characterName)
+        if (shouldRequest) then
+            updateLastOutgoingRequest(characterName)
+            -- Request equipment info
+            requestPlayerEquippedItems(characterName)
+        else
+            aura_addon.env:log("Outgoing requests throttled to target: " .. characterName)
+        end
     end
 end
 
@@ -149,9 +202,17 @@ local function handleEquippedItemsRequest(event, action, channelType, sender)
     
     aura_addon.env:log("Received request from: " .. sender)
     
-    if (action == EQUIPPED_ITEMS_ACTION) then
-        equippedItemsAction(sender)
+    -- check if this user is being throttled
+    local canRequest = requesterCanRequest(sender)
+    if (requesterCanRequest(sender)) then
+        if (action == EQUIPPED_ITEMS_ACTION) then
+            updateLastIncomingRequest(sender)
+            equippedItemsAction(sender)
+        end
+    else
+        aura_addon.env:log("Requester is being throttled: " .. sender)
     end
+    
 end
 
 --- Displays the equipped items which came in in a response
