@@ -267,7 +267,7 @@ end
 --- Displays the equipped items which came in in a response
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
-function displayEquippedItems(characterName, equippedItemsTable)
+local function displayEquippedItems(characterName, equippedItemsTable)
     aura_addon.env.frames:ResetAll()
     for i, v in pairs(equippedItemsTable) do
         aura_addon.env.frames:SetSlot(i, v[0], v[1])
