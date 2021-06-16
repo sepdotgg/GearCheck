@@ -253,6 +253,7 @@ local function handleEquippedItemsRequest(event, action, channelType, sender)
     if (requesterCanRequest(sender)) then
         local _, _, token = action:find(EQUIPPED_ITEMS_ACTION_PATTERN)
         if (token == nil) then
+            aura_addon.env:log("No token was included in the request from: " .. sender)
             return
         else
             updateLastIncomingRequest(sender)
@@ -261,7 +262,6 @@ local function handleEquippedItemsRequest(event, action, channelType, sender)
     else
         aura_addon.env:log("Requester is being throttled: " .. sender)
     end
-    
 end
 
 --- Displays the equipped items which came in in a response
