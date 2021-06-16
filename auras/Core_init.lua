@@ -9,8 +9,10 @@ local CHAT_LINK_PATTERN = "%[GearCheck: ([^%s]+)%]"
 local CHAT_LINK_TEMPLATE = "|H%s:%s|h|cFF00BFFF[GearCheck: %s]|h|r"
 local EXTRACT_CHAR_NAME_PATTERN = "%[GearCheck: ([^%s]+)%]"
 local EQUIPPED_ITEMS_ACTION = "EQUIPPED_ITEMS"
+local EQUIPPED_ITEMS_ACTION_PATTERN = "EQUIPPED_ITEMS:([^%s]+)"
 local SAVED_VARIABLES_KEY = "GCWA_POINT"
 local GLOBAL_GEARCHECK_KEY = "GEARCHECK_WA"
+local RAND_STR_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 local REQUEST_THROTTLE_SEC = 5
 
 _G[GLOBAL_GEARCHECK_KEY] = {}
@@ -20,9 +22,49 @@ aura_addon.env = aura_env
 
 aura_addon.env.lastIncomingRequest = { }
 aura_addon.env.lastOutgoingRequest = { }
-aura_addon.env.requestedFrom = { }
+aura_addon.env.pendingTokens = { }
 
 --- Utility Functions
+
+--- Generates a random string of lenth "len"
+--- @param len number The length of the random string to generate
+local function randomString(len)
+    local str = ""
+    for i = 0, len, 1 do
+        local r = math.random(1, string.len(RAND_STR_CHARSET))
+        local char = string.sub(RAND_STR_CHARSET, r, r)
+        str = str .. char
+    end
+    return str
+end
+
+--- Generates a new request token for the target character name
+--- The handler that displays the gear should only execute if the token in the response matches this request token
+-- @param targetCharName string The target that is receiving the gear check request.
+local function addPendingToken(targetCharName)
+    local token = randomString(8)
+    aura_addon.env.pendingTokens[targetCharName] = token
+    return token
+end
+
+--- Resets/Unsets any pending token for a target character
+--- @param targetCharName string The target that is receiving the gear check request.
+local function resetToken(targetCharName)
+    aura_addon.env:log("Resetting token for: " .. targetCharName)
+    aura_addon.env.pendingTokens[targetCharName] = nil 
+end
+
+--- Checks if the token is pending for the target character
+--- @param targetCharName string The target that is receiving the gear check request.
+--- @param token string The token received in the response message.
+local function isPendingRequest(targetCharName, token)
+    aura_addon.env:log("Checking token: [" .. targetCharName .. "] [" .. token .. "]")
+    local pendingToken = aura_addon.env.pendingTokens[targetCharName]
+    if (pendingToken == nil) then
+        return false
+    end
+    return pendingToken == token
+end
 
 --- Updates the last incoming request from a character
 --- @param charFullName string The full name/realm of the character requesting data.
@@ -35,7 +77,6 @@ end
 --- @param charFullName string The full name/realm of the target character.
 local function updateLastOutgoingRequest(targetCharName)
     local now = time()
-    print("Updating last outgoing request for target " .. targetCharName)
     aura_addon.env.lastOutgoingRequest[targetCharName] = now
 end
 
@@ -131,13 +172,15 @@ end
 --- Builds a table of equipped items for the current player.
 ---
 --- @return table Table of slot IDs to an indexed table of {itemLink, itemTextureId}
-local function getEquippedItems()
+local function getEquippedItems(token)
     local equipped = {}
+    equipped["token"] = token
+    equipped["items"] = {}
     for i = 1, 19 do
         local itemLink = GetInventoryItemLink("player", i)
         if itemLink ~= nil then
             local _, _, _, _, _, _, _, _, _, itemTexture, _ = GetItemInfo(itemLink)
-            equipped[i] = {
+            equipped["items"][i] = {
                 [0] = itemLink,
                 [1] = itemTexture
             }
@@ -148,17 +191,17 @@ end
 
 --- Sends an addon channel comm message to request a player's equipped items to the specified player.
 --- @param characterName string Name/Realm of the character who should receive the request on the addon channel.
-local function requestPlayerEquippedItems(characterName)
-    aura_addon.env:log("Requesting info from " .. characterName)
+local function requestPlayerEquippedItems(characterName, token)
+    aura_addon.env:log("Requesting info from " .. characterName .. " [" .. token .. "]")
     
     -- check if we can request from this character
-    aura_addon.env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION, "WHISPER", characterName)
+    aura_addon.env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION .. ":" .. token, "WHISPER", characterName)
 end
 
 --- Handles the "EQUIPPED_ITEMS" Action
 --- @param requestingCharacter string Name/Realm of the user who should receive the equipped items response.
-local function equippedItemsAction(requestingCharacter)
-    local equipped = getEquippedItems()
+local function equippedItemsAction(requestingCharacter, token)
+    local equipped = getEquippedItems(token)
     -- respond to the requester
     local serialized = aura_addon.env.GEAR_CHECK:Serialize(equipped)
     aura_addon.env.GEAR_CHECK:SendCommMessage(RESPOND_MSG_PREFIX, serialized, "WHISPER", requestingCharacter)
@@ -182,8 +225,11 @@ local function handleChatLinkClick(link, text)
         local shouldRequest = canRequestFromTarget(characterName)
         if (shouldRequest) then
             updateLastOutgoingRequest(characterName)
+
+            -- generate a new request token
+            local token = addPendingToken(characterName)
             -- Request equipment info
-            requestPlayerEquippedItems(characterName)
+            requestPlayerEquippedItems(characterName, token)
         else
             aura_addon.env:log("Outgoing requests throttled to target: " .. characterName)
         end
@@ -205,9 +251,12 @@ local function handleEquippedItemsRequest(event, action, channelType, sender)
     -- check if this user is being throttled
     local canRequest = requesterCanRequest(sender)
     if (requesterCanRequest(sender)) then
-        if (action == EQUIPPED_ITEMS_ACTION) then
+        local _, _, token = action:find(EQUIPPED_ITEMS_ACTION_PATTERN)
+        if (token == nil) then
+            return
+        else
             updateLastIncomingRequest(sender)
-            equippedItemsAction(sender)
+            equippedItemsAction(sender, token)
         end
     else
         aura_addon.env:log("Requester is being throttled: " .. sender)
@@ -244,8 +293,22 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
         error(("Failed to deserialize Equipped Items"):format(tostring(equipped)), 2)
         return -- there was some error deserializing, do nothing
     end
-    -- Display the items
-    displayEquippedItems(sender, deserialized)
+
+    -- check the token
+    local token = deserialized["token"]
+    if (token == nil) then
+        aura_addon.env:log("Empty token in the response from sender: " .. sender)
+        return
+    end
+
+    if (isPendingRequest(sender, token)) then
+        resetToken(sender)
+        -- Display the items
+        displayEquippedItems(sender, deserialized["items"])
+    else
+        aura_addon.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
+    end
+    
 end
 
 --- Hook function which filters Gear Check strings in chat and turns them into clickable links
@@ -263,8 +326,8 @@ local function chatLinkFilter(_, event, msg, player, l, cs, t, flag, channelId, 
         if(characterName) then
             characterName = characterName:gsub("|c[Ff][Ff]......", ""):gsub("|r", "")
             newMsg = newMsg..remaining:sub(1, start-1)
-            
-            local chatLink = string.format(CHAT_LINK_TEMPLATE, CHAT_LINK_TYPE, CHAT_LINK_ADDON_NAME, characterName)
+            local trimmedPlayer = Ambiguate(characterName, "none")
+            local chatLink = string.format(CHAT_LINK_TEMPLATE, CHAT_LINK_TYPE, CHAT_LINK_ADDON_NAME, trimmedPlayer)
             newMsg = newMsg..chatLink
             remaining = remaining:sub(finish + 1)
         else
