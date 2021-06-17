@@ -379,7 +379,7 @@ local function initItemFrames(parentRegion)
     loadSavedPoint(parentRegion)
     
     local function makeFrame(slotId)
-        local f = CreateFrame("Frame", nil, parentRegion)
+        local f = CreateFrame("Button", nil, parentRegion)
         f:SetSize(SIZE, SIZE)
         
         -- texture stuff
@@ -405,6 +405,19 @@ local function initItemFrames(parentRegion)
         function f:SetItemLink(link)
             f.itemLink = link
         end
+        
+        -- re-linking
+        f:RegisterForClicks("LeftButtonDown")
+        f:SetScript("OnClick", function(self)
+                if IsShiftKeyDown() and self.itemLink then
+                    local editbox = GetCurrentKeyBoardFocus()
+                    if editbox then
+                        editbox:Insert(self.itemLink) 
+                    end
+                elseif IsControlKeyDown() and self.itemLink then
+                    DressUpItemLink(self.itemLink)
+                end
+        end)
         
         f:Show()
         return f
