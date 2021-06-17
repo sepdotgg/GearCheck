@@ -262,8 +262,8 @@ local function handleChatLinkClick(link, text)
             local token = addPendingToken(characterName)
             -- Request equipment info
             requestPlayerEquippedItems(characterName, token)
-            GearCheckWA.frames:ResetAll()
-            GearCheckWA.parent:Show()
+            aura_addon.env.frames:ResetAll()
+            aura_addon.env.region:Show()
         else
             aura_addon.env:log("Outgoing requests throttled to target: " .. characterName)
         end
@@ -325,10 +325,10 @@ local function displayEquippedItems(characterInfo, equippedItemsTable)
     end
     
     for i, v in pairs(equippedItemsTable) do
-        GearCheckWA.frames:SetSlot(i, v[0], v[1])
+        aura_addon.env.frames:SetSlot(i, v[0], v[1])
     end
-    GearCheckWA.frames:SetText(topText, bottomText)
-    makeFrameMovable(GearCheckWA.parent)
+    aura_addon.env.frames:SetText(topText, bottomText)
+    makeFrameMovable(aura_addon.env.region)
 end
 
 --- Handles the Equipped Items response from a player
@@ -523,12 +523,10 @@ end
 
 --- Load up the item frames attached to the WA region, but only if they don't already exist
 local function loadFrames()
-    if GearCheckWA ~= nil then return end
-    GearCheckWA = {
-        ["parent"] = aura_env.region,
-        ["frames"] = initItemFrames(aura_env.region)
-    }
-    setglobal("GearCheckWA", GearCheckWA)
+    if (aura_addon.env.frames == nil) then
+        aura_addon.env.frames = initItemFrames(aura_addon.env.region)
+    end
+    aura_addon.env.region:Hide()
 end
 
 -- Initialize the Addon
