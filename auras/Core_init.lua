@@ -26,6 +26,15 @@ aura_addon.env.pendingTokens = { }
 
 --- Utility Functions
 
+--- Title cases a string
+--- @param str string The string to title case
+--- @return string The string in title case
+local function titleCase(str)
+    str = string.lower(str)
+    return str:gsub("(%l)(%w*)", function(a,b) return string.upper(a)..b end)
+end
+
+
 --- Generates a random string of lenth "len"
 --- @param len number The length of the random string to generate
 local function randomString(len)
@@ -176,16 +185,34 @@ local function getEquippedItems(token)
     local equipped = {}
     equipped["token"] = token
     equipped["items"] = {}
+    equipped["level"] = UnitLevel("player")
+    
+    local _, playerClass, _ = UnitClass("player")
+    
+    equipped["class"] = titleCase(playerClass)
+    
+    local numItems = 0
+    local ilvlSum = 0
     for i = 1, 19 do
         local itemLink = GetInventoryItemLink("player", i)
         if itemLink ~= nil then
-            local _, _, _, _, _, _, _, _, _, itemTexture, _ = GetItemInfo(itemLink)
+            local _, _, _, itemLevel, _, _, _, _, itemEquipLoc, itemTexture, _ = GetItemInfo(itemLink)
+            numItems = numItems + 1
+            ilvlSum = ilvlSum + itemLevel
+            -- 2 handed weapons count for both slots
+            if (itemEquipLoc == "INVTYPE_2HWEAPON") then
+                numItems = numItems + 1
+                ilvlSum = ilvlSum + itemLevel
+            end
+            
             equipped["items"][i] = {
                 [0] = itemLink,
                 [1] = itemTexture
             }
         end
     end
+    equipped["ilvl"] = math.floor((ilvlSum / numItems) * 100)/100
+    
     return equipped
 end
 
@@ -225,7 +252,7 @@ local function handleChatLinkClick(link, text)
         local shouldRequest = canRequestFromTarget(characterName)
         if (shouldRequest) then
             updateLastOutgoingRequest(characterName)
-
+            
             -- generate a new request token
             local token = addPendingToken(characterName)
             -- Request equipment info
@@ -294,14 +321,14 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
         error(("Failed to deserialize Equipped Items"):format(tostring(equipped)), 2)
         return -- there was some error deserializing, do nothing
     end
-
+    
     -- check the token
     local token = deserialized["token"]
     if (token == nil) then
         aura_addon.env:log("Empty token in the response from sender: " .. sender)
         return
     end
-
+    
     if (isPendingRequest(sender, token)) then
         resetToken(sender)
         -- Display the items
@@ -414,12 +441,12 @@ local function initItemFrames(parentRegion)
     closeButton:SetPoint("TOPRIGHT")
     closeButton:Show()
     
-     -- text
+    -- text
     frames.defaultText = "Loading..."
     frames.text = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
     frames.text:SetPoint("TOPLEFT", SIZE/4, -1*SIZE/4)
     frames.text:SetText(frames.defaultText)
-
+    
     function frames:ResetAll()
         for i=1,#frames do
             frames[i]:SetItemLink(nil)
@@ -432,7 +459,7 @@ local function initItemFrames(parentRegion)
         frames[slotId]:SetItemLink(itemLink)
         frames[slotId]:SetItemTexture(itemTexture)
     end
-
+    
     function frames:SetText(text)
         frames.text:SetText(text)
     end
