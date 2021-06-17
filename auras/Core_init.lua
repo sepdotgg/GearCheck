@@ -199,7 +199,7 @@ local function getEquippedItems(token)
         if itemLink ~= nil then
             local _, _, _, itemLevel, _, _, _, _, itemEquipLoc, itemTexture, _ = GetItemInfo(itemLink)
             if (i == 4 or i == 19) then
-              -- shirts and tabards should not be included in the calculation
+                -- shirts and tabards should not be included in the calculation
             elseif (itemEquipLoc == "INVTYPE_2HWEAPON") then
                 -- 2 handed weapons count for both slots
                 ilvlSum = ilvlSum + (itemLevel * 2)
@@ -306,7 +306,7 @@ local function displayEquippedItems(characterInfo, equippedItemsTable)
     local class = characterInfo["class"]
     local level = characterInfo["level"]
     local ilvl = characterInfo["ilvl"]
-
+    
     local topText = name
     if class and level then
         local r, g, b = GetClassColor(class:upper())
@@ -358,14 +358,14 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     
     if (isPendingRequest(sender, token)) then
         resetToken(sender)
-
+        
         local characterInfo = {
             ["name"] = sender,
             ["class"] = deserialized["class"] or nil,
             ["level"] = deserialized["level"] or nil,
             ["ilvl"] = deserialized["ilvl"] or nil
         }
-
+        
         -- Display the items
         displayEquippedItems(characterInfo, deserialized["items"])
     else
@@ -517,16 +517,38 @@ local function initItemFrames(parentRegion)
         frames.topText:SetText(topText)
         frames.bottomText:SetText(bottomText)
     end
-
+    
     return frames
+end
+
+--- Clear/hide any frames that previously existed
+--- @param frames table the "GearCheckWA.frames" table which contains all of the UI frames.
+local function clearFrames(frames)
+    for i, f in ipairs(frames) do
+        f:Hide()
+        f:SetScript("OnClick", nil)
+        f:SetScript("OnEnter", nil)
+        f:SetScript("OnLeave", nil)
+    end
+    
+    if (frames.topText ~= nil) then
+        frames.topText:Hide()
+    end
+    if (frames.bottomText ~= nil) then
+        frames.bottomText:Hide()
+    end
 end
 
 --- Load up the item frames attached to the WA region, but only if they don't already exist
 local function loadFrames()
-    if GearCheckWA ~= nil then return end
+    if GearCheckWA ~= nil then 
+        aura_addon.env:log("Clearing previous GearCheckWA frames")
+        clearFrames(GearCheckWA.frames)
+        GearCheckWA = { }
+    end
     GearCheckWA = {
-        ["parent"] = aura_env.region,
-        ["frames"] = initItemFrames(aura_env.region)
+        ["parent"] = aura_addon.env.region,
+        ["frames"] = initItemFrames(aura_addon.env.region)
     }
     setglobal("GearCheckWA", GearCheckWA)
 end
@@ -536,9 +558,9 @@ local function loadAddon()
     local AceComm = LibStub("AceComm-3.0")
     local AceEvent = LibStub("AceEvent-3.0")
     local AceSerializer = LibStub("AceSerializer-3.0")
-
+    
     aura_addon.env.GEAR_CHECK = {}
-
+    
     AceComm:Embed(aura_addon.env.GEAR_CHECK)
     AceEvent:Embed(aura_addon.env.GEAR_CHECK)
     AceSerializer:Embed(aura_addon.env.GEAR_CHECK)
