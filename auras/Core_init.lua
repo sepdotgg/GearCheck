@@ -11,12 +11,13 @@ local EXTRACT_CHAR_NAME_PATTERN = "%[GearCheck: ([^%s]+)%]"
 local EQUIPPED_ITEMS_ACTION = "EQUIPPED_ITEMS"
 local EQUIPPED_ITEMS_ACTION_PATTERN = "EQUIPPED_ITEMS:([^%s]+)"
 local SAVED_VARIABLES_KEY = "GCWA_POINT"
-local GLOBAL_GEARCHECK_KEY = "GEARCHECK_WA"
+local GLOBAL_GEARCHECK_ADDON_KEY = "GearCheckWA_Addon"
+local GLOBAL_GEARCHECK_WA_KEY = "GEARCHECK_WA"
 local RAND_STR_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 local REQUEST_THROTTLE_SEC = 5
 
-_G[GLOBAL_GEARCHECK_KEY] = {}
-local aura_addon = _G[GLOBAL_GEARCHECK_KEY]
+_G[GLOBAL_GEARCHECK_WA_KEY] = {}
+local aura_addon = _G[GLOBAL_GEARCHECK_WA_KEY]
 
 aura_addon.env = aura_env
 
@@ -116,7 +117,7 @@ end
 --- Log messages to DebugLog if it is installed
 --- @param data string String to log to DebugLog if it is installed
 function aura_addon.env:log(data)
-    if DLAPI then DLAPI.DebugLog(GLOBAL_GEARCHECK_KEY, data) end
+    if DLAPI then DLAPI.DebugLog(GLOBAL_GEARCHECK_WA_KEY, data) end
 end
 
 --- Saves the GearCheck frame's current position to SavedVariables
@@ -511,7 +512,15 @@ end
 
 -- Initialize the Addon
 local function loadAddon()
-    aura_addon.env.GEAR_CHECK = LibStub("AceAddon-3.0"):NewAddon("GearCheckWA", "AceComm-3.0", "AceEvent-3.0", "AceSerializer-3.0")
+    local AceComm = LibStub("AceComm-3.0")
+    local AceEvent = LibStub("AceEvent-3.0")
+    local AceSerialzier = LibStub("AceSerializer-3.0")
+
+    aura_addon.env.GEAR_CHECK = {}
+
+    AceComm:Embed(aura_addon.env.GEAR_CHECK)
+    AceEvent:Embed(aura_addon.env.GEAR_CHECK)
+    AceSerializer:Embed(aura_addon.env.GEAR_CHECK)
     
     -- register event channels
     aura_addon.env.GEAR_CHECK:RegisterComm(REQUEST_MSG_PREFIX, handleEquippedItemsRequest)
@@ -537,7 +546,7 @@ local function loadAddon()
     loadFrames()
 end
 
-local loadedAddon = LibStub("AceAddon-3.0"):GetAddon("GearCheckWA", true)
+local loadedAddon = _G[GLOBAL_GEARCHECK_ADDON_KEY]
 
 if (loadedAddon ~= nil) then
     aura_addon.env.GEAR_CHECK = loadedAddon
