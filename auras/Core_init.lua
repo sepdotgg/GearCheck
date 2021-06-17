@@ -298,7 +298,6 @@ end
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
 local function displayEquippedItems(characterInfo, equippedItemsTable)
-    
     local name = characterInfo["name"]
     local class = characterInfo["class"]
     local level = characterInfo["level"]
@@ -502,7 +501,7 @@ local function initItemFrames(parentRegion)
             frames[i]:SetItemLink(nil)
             frames[i]:SetItemTexture(nil)
         end
-        frames:SetText(frames.defaultTopText, frames.defaultBottOmText)
+        frames:SetText(frames.defaultTopText, frames.defaultBottomText)
     end
     
     function frames:SetSlot(slotId, itemLink, itemTexture)
