@@ -488,6 +488,7 @@ local function initItemFrames(parentRegion)
     return frames
 end
 
+--- Load up the item frames attached to the WA region, but only if they don't already exist
 local function loadFrames()
     if (aura_addon.env.frames == nil) then
         aura_addon.env.frames = initItemFrames(aura_addon.env.region)
