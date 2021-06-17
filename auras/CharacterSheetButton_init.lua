@@ -1,37 +1,33 @@
-local aura_addon = {}
-
 if not aura_env.clickableFrame then
-    local r = aura_env.region
-    aura_env.clickableFrame = CreateFrame("Button", nil, r, "GameMenuButtonTemplate")
-    aura_env.clickableFrame:SetText("Link")
-    aura_env.clickableFrame:Show()
+    local f = CreateFrame("Button", nil, aura_env.region, "GameMenuButtonTemplate")
+
+    f:SetAllPoints()
+    f:SetText("Link")
+
+    local name, realm = UnitFullName("player")
+    local charFullName = name
+    if realm then
+        charFullName = name.."-"..realm
+    f.gearCheckLink = "[GearCheck: "..charFullName.."]"
+
+    f:SetScript("OnClick", function(self)
+            if (IsShiftKeyDown()) then
+                local editbox = GetCurrentKeyBoardFocus()
+                if (editbox) then
+                    editbox:Insert(self.gearCheckLink);
+                end
+            end
+    end)
+
+    f:SetScript("OnEnter", function(self) 
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText( "|cFF00BFFFGearCheck|r\nShift+Click to create a link in chat\nThe recipient will need to have the GearCheck WeakAura installed." )
+            GameTooltip:Show()
+    end)
+
+    f:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    aura_env.clickableFrame = f
 end
 
-aura_env.clickableFrame:SetAllPoints()
-
-aura_env.clickableFrame:SetScript("onClick", function()
-        if (IsShiftKeyDown()) then
-            
-            local editbox = GetCurrentKeyBoardFocus()
-            if(editbox) then
-                if (aura_addon.charFullName == nil) then
-                    local name, realm = UnitFullName("player")
-                    if realm then
-                        aura_addon.charFullName = name.."-".. realm
-                    else
-                        aura_addon.charFullName = name
-                    end
-                end
-                editbox:Insert("[GearCheck: "..aura_addon.charFullName.."]");
-            end
-        end
-end)
-
-aura_env.clickableFrame:SetScript("onEnter", function() 
-        GameTooltip_SetDefaultAnchor( GameTooltip, UIParent )
-        GameTooltip:SetText( "GearCheck\nShift+Click to create a link in chat\nThe recipient will need to have the GearCheck WeakAura installed." )
-        GameTooltip:Show()
-end)
-
-aura_env.clickableFrame:SetScript("onLeave", function() GameTooltip:Hide() end)
-
+aura_env.clickableFrame:Show()
