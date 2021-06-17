@@ -198,11 +198,12 @@ local function getEquippedItems(token)
         local itemLink = GetInventoryItemLink("player", i)
         if itemLink ~= nil then
             local _, _, _, itemLevel, _, _, _, _, itemEquipLoc, itemTexture, _ = GetItemInfo(itemLink)
-            numItems = numItems + 1
-            ilvlSum = ilvlSum + itemLevel
-            -- 2 handed weapons count for both slots
-            if (itemEquipLoc == "INVTYPE_2HWEAPON") then
-                numItems = numItems + 1
+            if (i == 4 or i == 19) then
+              -- shirts and tabards should not be included in the calculation
+            elseif (itemEquipLoc == "INVTYPE_2HWEAPON") then
+                -- 2 handed weapons count for both slots
+                ilvlSum = ilvlSum + (itemLevel * 2)
+            else
                 ilvlSum = ilvlSum + itemLevel
             end
             
@@ -212,7 +213,10 @@ local function getEquippedItems(token)
             }
         end
     end
-    equipped["ilvl"] = math.floor((ilvlSum / numItems) * 100)/100
+    
+    -- there's 17 slots included in the ilvl calculation
+    -- two handers count twice because one slot will always be empty
+    equipped["ilvl"] = math.floor((ilvlSum / 17) * 100)/100
     
     return equipped
 end
@@ -317,7 +321,7 @@ local function displayEquippedItems(characterInfo, equippedItemsTable)
     
     local bottomText = ""
     if ilvl then
-        bottomText = ("ilvl %d"):format(ilvl)
+        bottomText = ("ilvl %.2f"):format(ilvl)
     end
     
     for i, v in pairs(equippedItemsTable) do
