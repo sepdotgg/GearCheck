@@ -8,6 +8,7 @@ if not aura_env.clickableFrame then
 end
 
 aura_env.clickableFrame:SetAllPoints()
+
 aura_env.clickableFrame:SetScript("onClick", function()
         if (IsShiftKeyDown()) then
             
