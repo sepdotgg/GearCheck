@@ -514,7 +514,7 @@ end
 local function loadAddon()
     local AceComm = LibStub("AceComm-3.0")
     local AceEvent = LibStub("AceEvent-3.0")
-    local AceSerialzier = LibStub("AceSerializer-3.0")
+    local AceSerializer = LibStub("AceSerializer-3.0")
 
     aura_addon.env.GEAR_CHECK = {}
 
