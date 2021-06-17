@@ -2,7 +2,9 @@ local aura_addon = {}
 
 if not aura_env.clickableFrame then
     local r = aura_env.region
-    aura_env.clickableFrame = CreateFrame("Button", "ConsumeButton", r, "SecureActionButtonTemplate")  
+    aura_env.clickableFrame = CreateFrame("Button", nil, r, "GameMenuButtonTemplate")
+    aura_env.clickableFrame:SetText("Link")
+    aura_env.clickableFrame:Show()
 end
 
 aura_env.clickableFrame:SetAllPoints()
