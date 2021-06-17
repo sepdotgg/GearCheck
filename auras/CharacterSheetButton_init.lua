@@ -8,13 +8,13 @@ if not aura_env.clickableFrame then
     local charFullName = name
     if realm then
         charFullName = name.."-"..realm
-    f.GearCheckLink = "[GearCheck: "..charFullName.."]"
+    f.gearCheckLink = "[GearCheck: "..charFullName.."]"
 
     f:SetScript("OnClick", function(self)
             if (IsShiftKeyDown()) then
                 local editbox = GetCurrentKeyBoardFocus()
                 if (editbox) then
-                    editbox:Insert(self.GearCheckLink);
+                    editbox:Insert(self.gearCheckLink);
                 end
             end
     end)
