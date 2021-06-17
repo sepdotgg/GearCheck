@@ -297,11 +297,34 @@ end
 --- Displays the equipped items which came in in a response
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
-local function displayEquippedItems(characterName, equippedItemsTable)
+local function displayEquippedItems(characterInfo, equippedItemsTable)
+    
+    local name = characterInfo["name"]
+    local class = characterInfo["class"]
+    local level = characterInfo["level"]
+    local ilvl = characterInfo["ilvl"]
+
+    local topText = name
+    if class and level then
+        local r, g, b = GetClassColor(class:upper())
+        local classColor = CreateColor(r, g, b)
+        name = classColor:WrapTextInColorCode(name)
+        topText = ("%s\n%d %s"):format(
+            name,
+            level,
+            class
+        )
+    end
+    
+    local bottomText = ""
+    if ilvl then
+        bottomText = ("ilvl %d"):format(ilvl)
+    end
+    
     for i, v in pairs(equippedItemsTable) do
         aura_addon.env.frames:SetSlot(i, v[0], v[1])
     end
-    aura_addon.env.frames:SetText(characterName)
+    aura_addon.env.frames:SetText(topText, bottomText)
     makeFrameMovable(aura_addon.env.region)
 end
 
@@ -333,28 +356,15 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     if (isPendingRequest(sender, token)) then
         resetToken(sender)
 
-        local characterName = sender
-        
-        -- colorcode the characterName
-        local characterClass = deserialized["class"]
-        if characterClass then
-            local r, g, b = GetClassColor(characterClass:upper())
-            local classColor = CreateColor(r, g, b)
-            characterName = classColor:WrapTextInColorCode(sender)
-            
-            -- append level
-            local characterLevel = deserialized["level"]
-            if characterLevel then
-                characterName = ("%s\n%d %s"):format(
-                    characterName,
-                    characterLevel,
-                    characterClass
-                )
-            end
-        end
+        local characterInfo = {
+            ["name"] = sender,
+            ["class"] = deserialized["class"] or nil,
+            ["level"] = deserialized["level"] or nil,
+            ["ilvl"] = deserialized["ilvl"] or nil
+        }
 
         -- Display the items
-        displayEquippedItems(characterName, deserialized["items"])
+        displayEquippedItems(characterInfo, deserialized["items"])
     else
         aura_addon.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
     end
@@ -477,17 +487,22 @@ local function initItemFrames(parentRegion)
     closeButton:Show()
     
     -- text
-    frames.defaultText = "Loading..."
-    frames.text = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
-    frames.text:SetPoint("TOPLEFT", SIZE/4, -1*SIZE/4)
-    frames.text:SetText(frames.defaultText)
+    frames.defaultTopText = "Loading..."
+    frames.topText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.topText:SetPoint("TOPLEFT", SIZE/4, -1*SIZE/4)
+    frames.topText:SetText(frames.defaultTopText)
+    
+    frames.defaultBottomText = ""
+    frames.bottomText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.bottomText:SetPoint("BOTTOM", 0, SIZE/4)
+    frames.bottomText:SetText(frames.defaultBottomText)
     
     function frames:ResetAll()
         for i=1,#frames do
             frames[i]:SetItemLink(nil)
             frames[i]:SetItemTexture(nil)
         end
-        frames.text:SetText(frames.defaultText)
+        frames:SetText(frames.defaultTopText, frames.defaultBottOmText)
     end
     
     function frames:SetSlot(slotId, itemLink, itemTexture)
@@ -495,10 +510,11 @@ local function initItemFrames(parentRegion)
         frames[slotId]:SetItemTexture(itemTexture)
     end
     
-    function frames:SetText(text)
-        frames.text:SetText(text)
+    function frames:SetText(topText, bottomText)
+        frames.topText:SetText(topText)
+        frames.bottomText:SetText(bottomText)
     end
-    
+
     return frames
 end
 
@@ -514,7 +530,7 @@ end
 local function loadAddon()
     local AceComm = LibStub("AceComm-3.0")
     local AceEvent = LibStub("AceEvent-3.0")
-    local AceSerialzier = LibStub("AceSerializer-3.0")
+    local AceSerializer = LibStub("AceSerializer-3.0")
 
     aura_addon.env.GEAR_CHECK = {}
 
