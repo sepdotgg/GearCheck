@@ -12,20 +12,37 @@ local EQUIPPED_ITEMS_ACTION = "EQUIPPED_ITEMS"
 local EQUIPPED_ITEMS_ACTION_PATTERN = "EQUIPPED_ITEMS:([^%s]+)"
 local SAVED_VARIABLES_KEY = "GCWA_POINT"
 local GLOBAL_GEARCHECK_ADDON_KEY = "GearCheckWA_Addon"
-local GLOBAL_GEARCHECK_WA_KEY = "GEARCHECK_WA"
+local GLOBAL_GEARCHECK_FRAMES_KEY = "GearCheckWA_Frames"
+local GLOBAL_GEARCHECK_WA_KEY = "GearCheckWA_Aura"
 local RAND_STR_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 local REQUEST_THROTTLE_SEC = 5
 
 _G[GLOBAL_GEARCHECK_WA_KEY] = {}
-local aura_addon = _G[GLOBAL_GEARCHECK_WA_KEY]
+local GearCheckAura = _G[GLOBAL_GEARCHECK_WA_KEY]
 
-aura_addon.env = aura_env
+GearCheckAura.env = aura_env
 
-aura_addon.env.lastIncomingRequest = { }
-aura_addon.env.lastOutgoingRequest = { }
-aura_addon.env.pendingTokens = { }
+GearCheckAura.env.lastIncomingRequest = { }
+GearCheckAura.env.lastOutgoingRequest = { }
+GearCheckAura.env.pendingTokens = { }
+GearCheckAura.FRAME = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
+
+--- Log messages to DebugLog if it is installed
+--- @param data string String to log to DebugLog if it is installed
+function GearCheckAura.env:log(data)
+    if DLAPI then DLAPI.DebugLog(GLOBAL_GEARCHECK_WA_KEY, data) end
+end
 
 --- Utility Functions
+
+--- Gets the global GearCheck WeakAura context
+--- This is the only method that should be used to reference the "GearCheckAura" local since its
+--- reference is locked at the time of a function's declaration
+--- 
+--- This method ensures we always get the most up to date reference.
+local function GetGCWA()
+    return _G[GLOBAL_GEARCHECK_WA_KEY]
+end
 
 --- Title cases a string
 --- @param str string The string to title case
@@ -53,23 +70,25 @@ end
 -- @param targetCharName string The target that is receiving the gear check request.
 local function addPendingToken(targetCharName)
     local token = randomString(8)
-    aura_addon.env.pendingTokens[targetCharName] = token
+    GetGCWA().env.pendingTokens[targetCharName] = token
     return token
 end
 
 --- Resets/Unsets any pending token for a target character
 --- @param targetCharName string The target that is receiving the gear check request.
 local function resetToken(targetCharName)
-    aura_addon.env:log("Resetting token for: " .. targetCharName)
-    aura_addon.env.pendingTokens[targetCharName] = nil 
+    local GCWA = GetGCWA()
+    GCWA.env:log("Resetting token for: " .. targetCharName)
+    GCWA.env.pendingTokens[targetCharName] = nil 
 end
 
 --- Checks if the token is pending for the target character
 --- @param targetCharName string The target that is receiving the gear check request.
 --- @param token string The token received in the response message.
 local function isPendingRequest(targetCharName, token)
-    aura_addon.env:log("Checking token: [" .. targetCharName .. "] [" .. token .. "]")
-    local pendingToken = aura_addon.env.pendingTokens[targetCharName]
+    local GCWA = GetGCWA()
+    GCWA.env:log("Checking token: [" .. targetCharName .. "] [" .. token .. "]")
+    local pendingToken = GCWA.env.pendingTokens[targetCharName]
     if (pendingToken == nil) then
         return false
     end
@@ -80,14 +99,14 @@ end
 --- @param charFullName string The full name/realm of the character requesting data.
 local function updateLastIncomingRequest(charFullName)
     local now = time()
-    aura_addon.env.lastIncomingRequest[charFullName] = now
+    GetGCWA().env.lastIncomingRequest[charFullName] = now
 end
 
 --- Updates the last out request to a character
 --- @param charFullName string The full name/realm of the target character.
 local function updateLastOutgoingRequest(targetCharName)
     local now = time()
-    aura_addon.env.lastOutgoingRequest[targetCharName] = now
+    GetGCWA().env.lastOutgoingRequest[targetCharName] = now
 end
 
 --- Checks if an incoming requester is outside of the throttling limit
@@ -95,7 +114,7 @@ end
 --- @return boolean True/false if the requester is allowed to request data.
 local function requesterCanRequest(requesterFullName)
     local now = time()
-    local lastRequested = aura_addon.env.lastIncomingRequest[requesterFullName]
+    local lastRequested = GetGCWA().env.lastIncomingRequest[requesterFullName]
     if (lastRequested == nil) then
         return true
     end
@@ -107,18 +126,14 @@ end
 --- @return boolean True/false if the outgoing request should proceed.
 local function canRequestFromTarget(targetCharName)
     local now = time()
-    local lastRequested = aura_addon.env.lastOutgoingRequest[targetCharName]
+    local lastRequested = GetGCWA().env.lastOutgoingRequest[targetCharName]
     if (lastRequested == nil) then
         return true
     end
     return (now - lastRequested) > REQUEST_THROTTLE_SEC
 end
 
---- Log messages to DebugLog if it is installed
---- @param data string String to log to DebugLog if it is installed
-function aura_addon.env:log(data)
-    if DLAPI then DLAPI.DebugLog(GLOBAL_GEARCHECK_WA_KEY, data) end
-end
+
 
 --- Saves the GearCheck frame's current position to SavedVariables
 --- @param frame table The main WeakAura Region frame
@@ -224,19 +239,20 @@ end
 --- Sends an addon channel comm message to request a player's equipped items to the specified player.
 --- @param characterName string Name/Realm of the character who should receive the request on the addon channel.
 local function requestPlayerEquippedItems(characterName, token)
-    aura_addon.env:log("Requesting info from " .. characterName .. " [" .. token .. "]")
+    GetGCWA().env:log("Requesting info from " .. characterName .. " [" .. token .. "]")
     
     -- check if we can request from this character
-    aura_addon.env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION .. ":" .. token, "WHISPER", characterName)
+    GetGCWA().env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION .. ":" .. token, "WHISPER", characterName)
 end
 
 --- Handles the "EQUIPPED_ITEMS" Action
 --- @param requestingCharacter string Name/Realm of the user who should receive the equipped items response.
 local function equippedItemsAction(requestingCharacter, token)
+    local GCWA = GetGCWA()
     local equipped = getEquippedItems(token)
     -- respond to the requester
-    local serialized = aura_addon.env.GEAR_CHECK:Serialize(equipped)
-    aura_addon.env.GEAR_CHECK:SendCommMessage(RESPOND_MSG_PREFIX, serialized, "WHISPER", requestingCharacter)
+    local serialized = GCWA.env.GEAR_CHECK:Serialize(equipped)
+    GCWA.env.GEAR_CHECK:SendCommMessage(RESPOND_MSG_PREFIX, serialized, "WHISPER", requestingCharacter)
 end
 
 -- Addon Message Event Handlers
@@ -246,6 +262,8 @@ end
 --- @param link string The link type and addon discriminator that the link used
 --- @param text string The raw text of the link that was clicked
 local function handleChatLinkClick(link, text)
+    local GCWA = GetGCWA()
+
     local linkType, addon = strsplit(":", link)
     if linkType == CHAT_LINK_TYPE and addon == CHAT_LINK_ADDON_NAME then
         
@@ -262,10 +280,10 @@ local function handleChatLinkClick(link, text)
             local token = addPendingToken(characterName)
             -- Request equipment info
             requestPlayerEquippedItems(characterName, token)
-            GearCheckWA.frames:ResetAll()
-            GearCheckWA.parent:Show()
+            GCWA.FRAME.frames:ResetAll()
+            GCWA.FRAME.parent:Show()
         else
-            aura_addon.env:log("Outgoing requests throttled to target: " .. characterName)
+            GCWA.env:log("Outgoing requests throttled to target: " .. characterName)
         end
     end
 end
@@ -279,22 +297,24 @@ local function handleEquippedItemsRequest(event, action, channelType, sender)
     if (channelType ~= "WHISPER") then -- only respond to requests on the whisper channel
         return
     end
+
+    local GCWA = GetGCWA()
     
-    aura_addon.env:log("Received request from: " .. sender)
+    GCWA.env:log("Received request from: " .. sender)
     
     -- check if this user is being throttled
     local canRequest = requesterCanRequest(sender)
     if (requesterCanRequest(sender)) then
         local _, _, token = action:find(EQUIPPED_ITEMS_ACTION_PATTERN)
         if (token == nil) then
-            aura_addon.env:log("No token was included in the request from: " .. sender)
+            GCWA.env:log("No token was included in the request from: " .. sender)
             return
         else
             updateLastIncomingRequest(sender)
             equippedItemsAction(sender, token)
         end
     else
-        aura_addon.env:log("Requester is being throttled: " .. sender)
+        GCWA.env:log("Requester is being throttled: " .. sender)
     end
 end
 
@@ -302,6 +322,8 @@ end
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
 local function displayEquippedItems(characterInfo, equippedItemsTable)
+    local GCWA = GetGCWA()
+
     local name = characterInfo["name"]
     local class = characterInfo["class"]
     local level = characterInfo["level"]
@@ -325,10 +347,10 @@ local function displayEquippedItems(characterInfo, equippedItemsTable)
     end
     
     for i, v in pairs(equippedItemsTable) do
-        GearCheckWA.frames:SetSlot(i, v[0], v[1])
+        GCWA.FRAME.frames:SetSlot(i, v[0], v[1])
     end
-    GearCheckWA.frames:SetText(topText, bottomText)
-    makeFrameMovable(GearCheckWA.parent)
+    GCWA.FRAME.frames:SetText(topText, bottomText)
+    makeFrameMovable(GCWA.FRAME.parent)
 end
 
 --- Handles the Equipped Items response from a player
@@ -337,12 +359,14 @@ end
 --- @param channelType string The channel which originated the message. Eg, "PARTY", "WHISPER"
 --- @param sender string The character which responded to the equipped items request.
 local function handleEquippedItemsResponse(event, equipped, channelType, sender)
-    aura_addon.env:log("Received Response from " .. sender)
+    local GCWA = GetGCWA()
+
+    GCWA.env:log("Received Response from " .. sender)
     if (channelType ~= "WHISPER") then
         return -- only respond to whispers to reduce chatter
     end
     
-    local success, deserialized = aura_addon.env.GEAR_CHECK:Deserialize(equipped)
+    local success, deserialized = GCWA.env.GEAR_CHECK:Deserialize(equipped)
     
     if (not success) then
         error(("Failed to deserialize Equipped Items"):format(tostring(equipped)), 2)
@@ -352,7 +376,7 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     -- check the token
     local token = deserialized["token"]
     if (token == nil) then
-        aura_addon.env:log("Empty token in the response from sender: " .. sender)
+        GCWA.env:log("Empty token in the response from sender: " .. sender)
         return
     end
     
@@ -369,7 +393,7 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
         -- Display the items
         displayEquippedItems(characterInfo, deserialized["items"])
     else
-        aura_addon.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
+        GCWA.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
     end
     
 end
@@ -522,7 +546,7 @@ local function initItemFrames(parentRegion)
 end
 
 --- Clear/hide any frames that previously existed
---- @param frames table the "GearCheckWA.frames" table which contains all of the UI frames.
+--- @param frames table the "GearCheckAura.FRAME.frames" table which contains all of the UI frames.
 local function clearFrames(frames)
     for i, f in ipairs(frames) do
         f:Hide()
@@ -541,16 +565,19 @@ end
 
 --- Load up the item frames attached to the WA region, but only if they don't already exist
 local function loadFrames()
-    if GearCheckWA ~= nil then 
-        aura_addon.env:log("Clearing previous GearCheckWA frames")
-        clearFrames(GearCheckWA.frames)
-        GearCheckWA = { }
+    local GCWA = GetGCWA()
+    -- check if there's any existing frames, clear them if so
+    local existingFrames = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
+    if (existingFrames ~= nil) then
+        GCWA.env:log("Clearing previous GearCheckWA frames")
+        clearFrames(existingFrames.frames)
     end
-    GearCheckWA = {
-        ["parent"] = aura_addon.env.region,
-        ["frames"] = initItemFrames(aura_addon.env.region)
-    }
-    setglobal("GearCheckWA", GearCheckWA)
+
+    -- reset the frame context and create new frames
+    _G[GLOBAL_GEARCHECK_FRAMES_KEY] = { }
+    GCWA.FRAME = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
+    GCWA.FRAME.parent = GCWA.env.region
+    GCWA.FRAME.frames = initItemFrames(GCWA.env.region)
 end
 
 -- Initialize the Addon
@@ -558,16 +585,19 @@ local function loadAddon()
     local AceComm = LibStub("AceComm-3.0")
     local AceEvent = LibStub("AceEvent-3.0")
     local AceSerializer = LibStub("AceSerializer-3.0")
+
+    local GCWA = GetGCWA()
     
-    aura_addon.env.GEAR_CHECK = {}
+    GCWA.env.GEAR_CHECK = {}
+    _G[GLOBAL_GEARCHECK_ADDON_KEY] = GCWA.env.GEAR_CHECK
     
-    AceComm:Embed(aura_addon.env.GEAR_CHECK)
-    AceEvent:Embed(aura_addon.env.GEAR_CHECK)
-    AceSerializer:Embed(aura_addon.env.GEAR_CHECK)
+    AceComm:Embed(GCWA.env.GEAR_CHECK)
+    AceEvent:Embed(GCWA.env.GEAR_CHECK)
+    AceSerializer:Embed(GCWA.env.GEAR_CHECK)
     
     -- register event channels
-    aura_addon.env.GEAR_CHECK:RegisterComm(REQUEST_MSG_PREFIX, handleEquippedItemsRequest)
-    aura_addon.env.GEAR_CHECK:RegisterComm(RESPOND_MSG_PREFIX, handleEquippedItemsResponse)
+    GCWA.env.GEAR_CHECK:RegisterComm(REQUEST_MSG_PREFIX, handleEquippedItemsRequest)
+    GCWA.env.GEAR_CHECK:RegisterComm(RESPOND_MSG_PREFIX, handleEquippedItemsResponse)
     
     -- set up the handler for clicking the chat links
     hooksecurefunc("SetItemRef", handleChatLinkClick)
@@ -592,9 +622,9 @@ end
 local loadedAddon = _G[GLOBAL_GEARCHECK_ADDON_KEY]
 
 if (loadedAddon ~= nil) then
-    aura_addon.env.GEAR_CHECK = loadedAddon
-    makeFrameMovable(aura_addon.env.region)
-    loadSavedPoint(aura_addon.env.region)
+    GearCheckAura.env.GEAR_CHECK = loadedAddon
+    makeFrameMovable(GearCheckAura.env.region)
+    loadSavedPoint(GearCheckAura.env.region)
     loadFrames()
 else
     loadAddon()
