@@ -4,8 +4,11 @@ if not aura_env.clickableFrame then
     f:SetAllPoints()
     f:SetText("Link")
 
-    local name = select(1, UnitFullName("player"))
-    f.GearCheckLink = "[GearCheck: "..name.."]"
+    local name, realm = UnitFullName("player")
+    local charFullName = name
+    if realm then
+        charFullName = name.."-"..realm
+    f.GearCheckLink = "[GearCheck: "..charFullName.."]"
 
     f:SetScript("OnClick", function(self)
             if (IsShiftKeyDown()) then
