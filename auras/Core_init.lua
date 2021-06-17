@@ -331,8 +331,7 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     
     if (isPendingRequest(sender, token)) then
         resetToken(sender)
-        
-        
+
         local characterName = sender
         
         -- colorcode the characterName
