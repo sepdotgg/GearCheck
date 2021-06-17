@@ -230,6 +230,8 @@ local function handleChatLinkClick(link, text)
             local token = addPendingToken(characterName)
             -- Request equipment info
             requestPlayerEquippedItems(characterName, token)
+            aura_addon.env.frames:ResetAll()
+            aura_addon.env.region:Show()
         else
             aura_addon.env:log("Outgoing requests throttled to target: " .. characterName)
         end
@@ -268,12 +270,11 @@ end
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
 local function displayEquippedItems(characterName, equippedItemsTable)
-    aura_addon.env.frames:ResetAll()
     for i, v in pairs(equippedItemsTable) do
         aura_addon.env.frames:SetSlot(i, v[0], v[1])
     end
+    aura_addon.env.frames:SetText(characterName)
     makeFrameMovable(aura_addon.env.region)
-    aura_addon.env.region:Show()
 end
 
 --- Handles the Equipped Items response from a player
@@ -413,16 +414,27 @@ local function initItemFrames(parentRegion)
     closeButton:SetPoint("TOPRIGHT")
     closeButton:Show()
     
+     -- text
+    frames.defaultText = "Loading..."
+    frames.text = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.text:SetPoint("TOPLEFT", SIZE/4, -1*SIZE/4)
+    frames.text:SetText(frames.defaultText)
+
     function frames:ResetAll()
         for i=1,#frames do
             frames[i]:SetItemLink(nil)
             frames[i]:SetItemTexture(nil)
         end
+        frames.text:SetText(frames.defaultText)
     end
     
     function frames:SetSlot(slotId, itemLink, itemTexture)
         frames[slotId]:SetItemLink(itemLink)
         frames[slotId]:SetItemTexture(itemTexture)
+    end
+
+    function frames:SetText(text)
+        frames.text:SetText(text)
     end
     
     return frames
