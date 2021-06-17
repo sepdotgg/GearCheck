@@ -331,8 +331,29 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     
     if (isPendingRequest(sender, token)) then
         resetToken(sender)
+
+        local characterName = sender
+        
+        -- colorcode the characterName
+        local characterClass = deserialized["class"]
+        if characterClass then
+            local r, g, b = GetClassColor(characterClass:upper())
+            local classColor = CreateColor(r, g, b)
+            characterName = classColor:WrapTextInColorCode(sender)
+            
+            -- append level
+            local characterLevel = deserialized["level"]
+            if characterLevel then
+                characterName = ("%s\n%d %s"):format(
+                    characterName,
+                    characterLevel,
+                    characterClass
+                )
+            end
+        end
+
         -- Display the items
-        displayEquippedItems(sender, deserialized["items"])
+        displayEquippedItems(characterName, deserialized["items"])
     else
         aura_addon.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
     end
@@ -480,6 +501,14 @@ local function initItemFrames(parentRegion)
     return frames
 end
 
+--- Load up the item frames attached to the WA region, but only if they don't already exist
+local function loadFrames()
+    if (aura_addon.env.frames == nil) then
+        aura_addon.env.frames = initItemFrames(aura_addon.env.region)
+    end
+    aura_addon.env.region:Hide()
+end
+
 -- Initialize the Addon
 local function loadAddon()
     aura_addon.env.GEAR_CHECK = LibStub("AceAddon-3.0"):NewAddon("GearCheckWA", "AceComm-3.0", "AceEvent-3.0", "AceSerializer-3.0")
@@ -505,8 +534,7 @@ local function loadAddon()
     ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT", chatLinkFilter)
     ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", chatLinkFilter)
     
-    aura_addon.env.frames = initItemFrames(aura_addon.env.region)
-    aura_addon.env.region:Hide()
+    loadFrames()
 end
 
 local loadedAddon = LibStub("AceAddon-3.0"):GetAddon("GearCheckWA", true)
@@ -515,7 +543,7 @@ if (loadedAddon ~= nil) then
     aura_addon.env.GEAR_CHECK = loadedAddon
     makeFrameMovable(aura_addon.env.region)
     loadSavedPoint(aura_addon.env.region)
-    aura_addon.env.frames = initItemFrames(aura_addon.env.region)
+    loadFrames()
 else
     loadAddon()
 end
