@@ -321,6 +321,30 @@ function GearCheckAura:handleEquippedItemsRequest(event, action, channelType, se
     end
 end
 
+--- Calculates a GearScore from a player's class and equipped items, if GearScore is installed
+--- Otherwise returns nil
+--- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
+--- @param The class of the player
+function GearCheckAura:calculateGearScore(equippedItemsTable, playerClass)
+    if (GearScore_GetItemScore == nil) then
+        return nil
+    end
+
+    local gearScore = 0
+    local tempScore = 0
+
+    for i, v in pairs(equippedItemsTable) do
+        if (v[0] ~= nil) then
+            local gsItemLink = select(2, GetItemInfo(v[0])) -- GS doesn't like the object unless we re-get it?
+            local tempScore, _ = GearScore_GetItemScore(gsItemLink)
+            if ( i == 16 or i == 17 ) and ( playerClass:upper() == "HUNTER" ) then tempScore = tempScore * 0.3164 end
+            if ( i == 18 ) and ( playerClass:upper() == "HUNTER" ) then tempScore = tempScore * 5.3224 end
+            gearScore = gearScore + tempScore
+        end
+    end
+    return gearScore
+end
+
 --- Displays the equipped items which came in in a response
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
@@ -352,11 +376,23 @@ function GearCheckAura:displayEquippedItems(characterInfo, equippedItemsTable)
     if (talents ~= nil) then
         talentText = ("%d / %d / %d"):format(talents[1], talents[2], talents[3])
     end
+
+    local gearScoreText = ""
+    if (class ~= nil) then
+        local gearScore = self:calculateGearScore(equippedItemsTable, class)
+        
+        if (gearScore ~= nil and GearScore_GetQuality ~= nil) then
+            local gsTxt = ("%d"):format(gearScore)
+            local r, b, g = GearScore_GetQuality(gearScore)
+            local gsColor = CreateColor(r, g, b)
+            gearScoreText = "GearScore: " .. gsColor:WrapTextInColorCode(gsTxt)
+        end
+    end
     
     for i, v in pairs(equippedItemsTable) do
         self.FRAME.frames:SetSlot(i, v[0], v[1])
     end
-    self.FRAME.frames:SetText(topText, bottomText, talentText)
+    self.FRAME.frames:SetText(topText, bottomText, talentText, gearScoreText)
     self:makeFrameMovable(self.FRAME.parent)
 end
 
@@ -538,21 +574,27 @@ function GearCheckAura:initItemFrames(parentRegion)
     frames.topText:SetText(frames.defaultTopText)
     
     frames.defaultIlvlText = ""
-    frames.ilvlText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
-    frames.ilvlText:SetPoint("BOTTOM", 0, SIZE/4)
+
+    frames.ilvlBtnFrame = CreateFrame("Button", nil, parentRegion)
+    frames.ilvlBtnFrame:SetSize(SIZE*2, SIZE)
+    frames.ilvlBtnFrame:SetPoint("BOTTOM", 0, SIZE/4)
+    frames.ilvlText = frames.ilvlBtnFrame:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.ilvlText:SetPoint("CENTER")
     frames.ilvlText:SetText(frames.defaultIlvlText)
 
     frames.defaultTalentText = ""
     frames.talentText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
     frames.talentText:SetPoint("BOTTOM", 0, SIZE)
     frames.talentText:SetText(frames.defaultTalentText)
+
+    frames.defaultGearScoreText = ""
     
     function frames:ResetAll()
         for i=1,#frames do
             frames[i]:SetItemLink(nil)
             frames[i]:SetItemTexture(nil)
         end
-        frames:SetText(frames.defaultTopText, frames.ilvlText, frames.defaultTalentText)
+        frames:SetText(frames.defaultTopText, frames.defaultIlvlText, frames.defaultTalentText, frames.defaultGearScoreText)
     end
     
     function frames:SetSlot(slotId, itemLink, itemTexture)
@@ -560,10 +602,21 @@ function GearCheckAura:initItemFrames(parentRegion)
         frames[slotId]:SetItemTexture(itemTexture)
     end
     
-    function frames:SetText(topText, ilvlText, talentText)
+    function frames:SetText(topText, ilvlText, talentText, gearScoreText)
         frames.topText:SetText(topText)
         frames.ilvlText:SetText(ilvlText)
         frames.talentText:SetText(talentText)
+        frames.gearScoreText = gearScoreText
+
+        frames.ilvlBtnFrame:SetScript("OnEnter", function()
+            if (frames.gearScoreText ~= "") then
+                GameTooltip:SetOwner(frames.ilvlBtnFrame, "ANCHOR_RIGHT")
+                GameTooltip:SetText(frames.gearScoreText)
+                GameTooltip:Show()
+            end
+        end)
+
+        frames.ilvlBtnFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
     end
     
     return frames
@@ -584,6 +637,17 @@ function GearCheckAura:clearFrames(frames)
     end
     if (frames.bottomText ~= nil) then
         frames.bottomText:Hide()
+    end
+    if (frames.ilvlText ~= nil) then
+        frames.ilvlText:Hide()
+    end
+    if (frames.talentText ~= nil) then
+        frames.talentText:Hide()
+    end
+    if (frames.ilvlBtnFrame ~= nil) then
+        frames.ilvlBtnFrame:Hide()
+        frames.ilvlBtnFrame:SetScript("OnEnter", nil)
+        frames.ilvlBtnFrame:SetScript("OnLeave", nil)
     end
 end
 
