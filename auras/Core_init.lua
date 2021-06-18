@@ -47,7 +47,7 @@ end
 --- Title cases a string
 --- @param str string The string to title case
 --- @return string The string in title case
-local function titleCase(str)
+function GearCheckAura:titleCase(str)
     str = string.lower(str)
     return str:gsub("(%l)(%w*)", function(a,b) return string.upper(a)..b end)
 end
@@ -55,7 +55,7 @@ end
 
 --- Generates a random string of lenth "len"
 --- @param len number The length of the random string to generate
-local function randomString(len)
+function GearCheckAura:randomString(len)
     local str = ""
     for i = 0, len, 1 do
         local r = math.random(1, string.len(RAND_STR_CHARSET))
@@ -68,27 +68,25 @@ end
 --- Generates a new request token for the target character name
 --- The handler that displays the gear should only execute if the token in the response matches this request token
 -- @param targetCharName string The target that is receiving the gear check request.
-local function addPendingToken(targetCharName)
-    local token = randomString(8)
-    GetGCWA().env.pendingTokens[targetCharName] = token
+function GearCheckAura:addPendingToken(targetCharName)
+    local token = self:randomString(8)
+    self.env.pendingTokens[targetCharName] = token
     return token
 end
 
 --- Resets/Unsets any pending token for a target character
 --- @param targetCharName string The target that is receiving the gear check request.
-local function resetToken(targetCharName)
-    local GCWA = GetGCWA()
-    GCWA.env:log("Resetting token for: " .. targetCharName)
-    GCWA.env.pendingTokens[targetCharName] = nil 
+function GearCheckAura:resetToken(targetCharName)
+    self.env:log("Resetting token for: " .. targetCharName)
+    self.env.pendingTokens[targetCharName] = nil 
 end
 
 --- Checks if the token is pending for the target character
 --- @param targetCharName string The target that is receiving the gear check request.
 --- @param token string The token received in the response message.
-local function isPendingRequest(targetCharName, token)
-    local GCWA = GetGCWA()
-    GCWA.env:log("Checking token: [" .. targetCharName .. "] [" .. token .. "]")
-    local pendingToken = GCWA.env.pendingTokens[targetCharName]
+function GearCheckAura:isPendingRequest(targetCharName, token)
+    self.env:log("Checking token: [" .. targetCharName .. "] [" .. token .. "]")
+    local pendingToken = self.env.pendingTokens[targetCharName]
     if (pendingToken == nil) then
         return false
     end
@@ -97,24 +95,24 @@ end
 
 --- Updates the last incoming request from a character
 --- @param charFullName string The full name/realm of the character requesting data.
-local function updateLastIncomingRequest(charFullName)
+function GearCheckAura:updateLastIncomingRequest(charFullName)
     local now = time()
-    GetGCWA().env.lastIncomingRequest[charFullName] = now
+    self.env.lastIncomingRequest[charFullName] = now
 end
 
 --- Updates the last out request to a character
 --- @param charFullName string The full name/realm of the target character.
-local function updateLastOutgoingRequest(targetCharName)
+function GearCheckAura:updateLastOutgoingRequest(targetCharName)
     local now = time()
-    GetGCWA().env.lastOutgoingRequest[targetCharName] = now
+    self.env.lastOutgoingRequest[targetCharName] = now
 end
 
 --- Checks if an incoming requester is outside of the throttling limit
 --- @param requesterFullName string The full name/realm of the character requesting data.
 --- @return boolean True/false if the requester is allowed to request data.
-local function requesterCanRequest(requesterFullName)
+function GearCheckAura:requesterCanRequest(requesterFullName)
     local now = time()
-    local lastRequested = GetGCWA().env.lastIncomingRequest[requesterFullName]
+    local lastRequested = self.env.lastIncomingRequest[requesterFullName]
     if (lastRequested == nil) then
         return true
     end
@@ -124,20 +122,18 @@ end
 --- Checks if an outgoing request is within the throttling limit to the target character
 --- @param requesterFullName string The full name/realm of the  target character.
 --- @return boolean True/false if the outgoing request should proceed.
-local function canRequestFromTarget(targetCharName)
+function GearCheckAura:canRequestFromTarget(targetCharName)
     local now = time()
-    local lastRequested = GetGCWA().env.lastOutgoingRequest[targetCharName]
+    local lastRequested = self.env.lastOutgoingRequest[targetCharName]
     if (lastRequested == nil) then
         return true
     end
     return (now - lastRequested) > REQUEST_THROTTLE_SEC
 end
 
-
-
 --- Saves the GearCheck frame's current position to SavedVariables
 --- @param frame table The main WeakAura Region frame
-local function savePoint(frame)
+function GearCheckAura:savePoint(frame)
     local pos = {}
     local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint()
     pos.point = point
@@ -151,7 +147,7 @@ end
 
 --- Loads the main frame's saved position from Saved Variables and applies that position to the provied frame
 --- @param frame table The frame to have its position set
-local function loadSavedPoint(frame)
+function GearCheckAura:loadSavedPoint(frame)
     local savedPoint = WeakAurasSaved[SAVED_VARIABLES_KEY]
     if (savedPoint ~= nil) then
         frame:SetPoint(savedPoint.point, UIParent, savedPoint.relativePoint, savedPoint.xOfs, savedPoint.yOfs)
@@ -161,7 +157,8 @@ end
 --- Makes a Frame able to be moved and dragged
 --- Saves the frame's position to WeakAuras saved variables
 --- @param frame table The frame to make movable and have its position stored
-local function makeFrameMovable(frame)
+function GearCheckAura:makeFrameMovable(frame)
+    local GCWA = self; -- self is re-assigned in the anonymous functions below
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:SetScript("OnMouseDown", function(self, button)
@@ -174,14 +171,14 @@ local function makeFrameMovable(frame)
             if button == "LeftButton" and self.isMoving then
                 self:StopMovingOrSizing();
                 self.isMoving = false;
-                savePoint(self)
+                GCWA:savePoint(self)
             end
     end)
     frame:SetScript("OnHide", function(self)
             if ( self.isMoving ) then
                 self:StopMovingOrSizing();
                 self.isMoving = false;
-                savePoint(self)
+                GCWA:savePoint(self)
             end
     end)
 end
@@ -189,7 +186,7 @@ end
 --- Extracts a Character name and Realm from a Chat Link string.
 --- @param str string The chat link string
 --- @return table The character name/realm in the format of "Name-Realm"
-local function extractCharacterFromChatLink(str)
+function GearCheckAura:extractCharacterFromChatLink(str)
     local _, _, characterName = str:find(EXTRACT_CHAR_NAME_PATTERN)
     return characterName
 end
@@ -197,15 +194,21 @@ end
 --- Builds a table of equipped items for the current player.
 ---
 --- @return table Table of slot IDs to an indexed table of {itemLink, itemTextureId}
-local function getEquippedItems(token)
+function GearCheckAura:getEquippedItems(token)
     local equipped = {}
     equipped["token"] = token
     equipped["items"] = {}
     equipped["level"] = UnitLevel("player")
+
+    equipped["talents"] = {
+        [1] = select(3, GetTalentTabInfo(1)),
+        [2] = select(3, GetTalentTabInfo(2)),
+        [3] = select(3, GetTalentTabInfo(3)),
+    }
     
     local _, playerClass, _ = UnitClass("player")
     
-    equipped["class"] = titleCase(playerClass)
+    equipped["class"] = self:titleCase(playerClass)
     
     local numItems = 0
     local ilvlSum = 0
@@ -238,52 +241,54 @@ end
 
 --- Sends an addon channel comm message to request a player's equipped items to the specified player.
 --- @param characterName string Name/Realm of the character who should receive the request on the addon channel.
-local function requestPlayerEquippedItems(characterName, token)
-    GetGCWA().env:log("Requesting info from " .. characterName .. " [" .. token .. "]")
-    
+function GearCheckAura:requestPlayerEquippedItems(characterName, token)
+    self.env:log("Requesting info from " .. characterName .. " [" .. token .. "]")
     -- check if we can request from this character
-    GetGCWA().env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION .. ":" .. token, "WHISPER", characterName)
+    self.env.GEAR_CHECK:SendCommMessage(REQUEST_MSG_PREFIX, EQUIPPED_ITEMS_ACTION .. ":" .. token, "WHISPER", characterName)
 end
 
 --- Handles the "EQUIPPED_ITEMS" Action
 --- @param requestingCharacter string Name/Realm of the user who should receive the equipped items response.
-local function equippedItemsAction(requestingCharacter, token)
-    local GCWA = GetGCWA()
-    local equipped = getEquippedItems(token)
+function GearCheckAura:equippedItemsAction(requestingCharacter, token)
+    local equipped = self:getEquippedItems(token)
     -- respond to the requester
-    local serialized = GCWA.env.GEAR_CHECK:Serialize(equipped)
-    GCWA.env.GEAR_CHECK:SendCommMessage(RESPOND_MSG_PREFIX, serialized, "WHISPER", requestingCharacter)
+    local serialized = self.env.GEAR_CHECK:Serialize(equipped)
+    self.env.GEAR_CHECK:SendCommMessage(RESPOND_MSG_PREFIX, serialized, "WHISPER", requestingCharacter)
 end
 
 -- Addon Message Event Handlers
+
+--- Simple wrapper for the chat link click method that will always use the most up to date GearCheck WA
+--- WARNING: If this method changes, users will need to /reload to get the changes.
+GearCheckAura.chatLinkClickEntry = function(...)
+    GetGCWA():handleChatLinkClick(...)
+end
 
 --- Handles clicking on Gear Check links
 --- See SetItemRef: https://wowpedia.fandom.com/wiki/API_SetItemRef
 --- @param link string The link type and addon discriminator that the link used
 --- @param text string The raw text of the link that was clicked
-local function handleChatLinkClick(link, text)
-    local GCWA = GetGCWA()
-
+function GearCheckAura:handleChatLinkClick(link, text)
     local linkType, addon = strsplit(":", link)
     if linkType == CHAT_LINK_TYPE and addon == CHAT_LINK_ADDON_NAME then
         
-        local characterName = extractCharacterFromChatLink(text)
+        local characterName = self:extractCharacterFromChatLink(text)
         if (characterName == nil) then
             return
         end
         -- Are we clicking the same link too quickly?
-        local shouldRequest = canRequestFromTarget(characterName)
+        local shouldRequest = self:canRequestFromTarget(characterName)
         if (shouldRequest) then
-            updateLastOutgoingRequest(characterName)
+            self:updateLastOutgoingRequest(characterName)
             
             -- generate a new request token
-            local token = addPendingToken(characterName)
+            local token = self:addPendingToken(characterName)
             -- Request equipment info
-            requestPlayerEquippedItems(characterName, token)
-            GCWA.FRAME.frames:ResetAll()
-            GCWA.FRAME.parent:Show()
+            self:requestPlayerEquippedItems(characterName, token)
+            self.FRAME.frames:ResetAll()
+            self.FRAME.parent:Show()
         else
-            GCWA.env:log("Outgoing requests throttled to target: " .. characterName)
+            self.env:log("Outgoing requests throttled to target: " .. characterName)
         end
     end
 end
@@ -293,41 +298,38 @@ end
 --- @param action string The message body, in our case this is the Action that should be performed.
 --- @param channelType string The channel which originated the message. Eg, "PARTY", "WHISPER"
 --- @param sender string The character that initiated the request for a player's equipped items by clicking a link.
-local function handleEquippedItemsRequest(event, action, channelType, sender)
+function GearCheckAura:handleEquippedItemsRequest(event, action, channelType, sender)
     if (channelType ~= "WHISPER") then -- only respond to requests on the whisper channel
         return
     end
-
-    local GCWA = GetGCWA()
     
-    GCWA.env:log("Received request from: " .. sender)
+    self.env:log("Received request from: " .. sender)
     
     -- check if this user is being throttled
-    local canRequest = requesterCanRequest(sender)
-    if (requesterCanRequest(sender)) then
+    local canRequest = self:requesterCanRequest(sender)
+    if (self:requesterCanRequest(sender)) then
         local _, _, token = action:find(EQUIPPED_ITEMS_ACTION_PATTERN)
         if (token == nil) then
-            GCWA.env:log("No token was included in the request from: " .. sender)
+            self.env:log("No token was included in the request from: " .. sender)
             return
         else
-            updateLastIncomingRequest(sender)
-            equippedItemsAction(sender, token)
+            self:updateLastIncomingRequest(sender)
+            self:equippedItemsAction(sender, token)
         end
     else
-        GCWA.env:log("Requester is being throttled: " .. sender)
+        self.env:log("Requester is being throttled: " .. sender)
     end
 end
 
 --- Displays the equipped items which came in in a response
 --- @param characterName string The name/realm of the character.
 --- @param equippedItemsTable table Equipped items table. Key is slot ID with value being {itemLink, itemTextureId}
-local function displayEquippedItems(characterInfo, equippedItemsTable)
-    local GCWA = GetGCWA()
-
+function GearCheckAura:displayEquippedItems(characterInfo, equippedItemsTable)
     local name = characterInfo["name"]
     local class = characterInfo["class"]
     local level = characterInfo["level"]
     local ilvl = characterInfo["ilvl"]
+    local talents = characterInfo["talents"]
     
     local topText = name
     if class and level then
@@ -342,15 +344,20 @@ local function displayEquippedItems(characterInfo, equippedItemsTable)
     end
     
     local bottomText = ""
-    if ilvl then
+    if (ilvl ~= nil) then
         bottomText = ("ilvl %.2f"):format(ilvl)
+    end
+
+    local talentText = ""
+    if (talents ~= nil) then
+        talentText = ("%d / %d / %d"):format(talents[1], talents[2], talents[3])
     end
     
     for i, v in pairs(equippedItemsTable) do
-        GCWA.FRAME.frames:SetSlot(i, v[0], v[1])
+        self.FRAME.frames:SetSlot(i, v[0], v[1])
     end
-    GCWA.FRAME.frames:SetText(topText, bottomText)
-    makeFrameMovable(GCWA.FRAME.parent)
+    self.FRAME.frames:SetText(topText, bottomText, talentText)
+    self:makeFrameMovable(self.FRAME.parent)
 end
 
 --- Handles the Equipped Items response from a player
@@ -358,15 +365,13 @@ end
 --- @param equipped string Ace3 serialized string which contains the equipped items table
 --- @param channelType string The channel which originated the message. Eg, "PARTY", "WHISPER"
 --- @param sender string The character which responded to the equipped items request.
-local function handleEquippedItemsResponse(event, equipped, channelType, sender)
-    local GCWA = GetGCWA()
-
-    GCWA.env:log("Received Response from " .. sender)
+function GearCheckAura:handleEquippedItemsResponse(event, equipped, channelType, sender)
+    self.env:log("Received Response from " .. sender)
     if (channelType ~= "WHISPER") then
         return -- only respond to whispers to reduce chatter
     end
     
-    local success, deserialized = GCWA.env.GEAR_CHECK:Deserialize(equipped)
+    local success, deserialized = self.env.GEAR_CHECK:Deserialize(equipped)
     
     if (not success) then
         error(("Failed to deserialize Equipped Items"):format(tostring(equipped)), 2)
@@ -376,26 +381,33 @@ local function handleEquippedItemsResponse(event, equipped, channelType, sender)
     -- check the token
     local token = deserialized["token"]
     if (token == nil) then
-        GCWA.env:log("Empty token in the response from sender: " .. sender)
+        self.env:log("Empty token in the response from sender: " .. sender)
         return
     end
     
-    if (isPendingRequest(sender, token)) then
-        resetToken(sender)
+    if (self:isPendingRequest(sender, token)) then
+        self:resetToken(sender)
         
         local characterInfo = {
             ["name"] = sender,
             ["class"] = deserialized["class"] or nil,
             ["level"] = deserialized["level"] or nil,
-            ["ilvl"] = deserialized["ilvl"] or nil
+            ["ilvl"] = deserialized["ilvl"] or nil,
+            ["talents"] = deserialized["talents"] or nil,
         }
         
         -- Display the items
-        displayEquippedItems(characterInfo, deserialized["items"])
+        self:displayEquippedItems(characterInfo, deserialized["items"])
     else
-        GCWA.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
+        self.env:log("Received token is not valid. [" .. sender .. "] [" .. token .. "]")
     end
     
+end
+
+--- Simple wrapper for the REQUEST comm method that will always use the most up to date GearCheck WA
+--- WARNING: If this method changes, users will need to /reload to get the changes.
+GearCheckAura.requestCommEntry = function(...)
+    GetGCWA():handleEquippedItemsRequest(...)
 end
 
 --- Hook function which filters Gear Check strings in chat and turns them into clickable links
@@ -426,16 +438,22 @@ local function chatLinkFilter(_, event, msg, player, l, cs, t, flag, channelId, 
     end
 end
 
+--- Simple wrapper for the RESPONSE comm method that will always use the most up to date GearCheck WA
+--- WARNING: If this method changes, users will need to /reload to get the changes.
+GearCheckAura.responseCommEntry = function(...)
+    GetGCWA():handleEquippedItemsResponse(...)
+end
+
 --- Initialize the main Item Frames region and slots
 --- @param parentRegion table The parent region which will anchor the frames. Normally this is aura_env.region.
 --- @returns table An array/table of frames for each slot.
-local function initItemFrames(parentRegion)
+function GearCheckAura:initItemFrames(parentRegion)
     local frames = {}
     local SIZE = 32
     local defaultSlotTextures = {[1] = 136516, [2] = 136519, [3] = 136526, [4] = 136525, [5] = 136512, [6] = 136529, [7] = 136517, [8] = 136513, [9] = 136530, [10] = 136515, [11] = 136514, [12] = 136514, [13] = 136528, [14] = 136528, [15] = 136512, [16] = 136518, [17] = 136524, [18] = 136520, [19] = 136527}
     
-    makeFrameMovable(parentRegion)
-    loadSavedPoint(parentRegion)
+    self:makeFrameMovable(parentRegion)
+    self:loadSavedPoint(parentRegion)
     
     local function makeFrame(slotId)
         local f = CreateFrame("Button", nil, parentRegion)
@@ -519,17 +537,22 @@ local function initItemFrames(parentRegion)
     frames.topText:SetPoint("TOPLEFT", SIZE/4, -1*SIZE/4)
     frames.topText:SetText(frames.defaultTopText)
     
-    frames.defaultBottomText = ""
-    frames.bottomText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
-    frames.bottomText:SetPoint("BOTTOM", 0, SIZE/4)
-    frames.bottomText:SetText(frames.defaultBottomText)
+    frames.defaultIlvlText = ""
+    frames.ilvlText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.ilvlText:SetPoint("BOTTOM", 0, SIZE/4)
+    frames.ilvlText:SetText(frames.defaultIlvlText)
+
+    frames.defaultTalentText = ""
+    frames.talentText = parentRegion:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    frames.talentText:SetPoint("BOTTOM", 0, SIZE)
+    frames.talentText:SetText(frames.defaultTalentText)
     
     function frames:ResetAll()
         for i=1,#frames do
             frames[i]:SetItemLink(nil)
             frames[i]:SetItemTexture(nil)
         end
-        frames:SetText(frames.defaultTopText, frames.defaultBottomText)
+        frames:SetText(frames.defaultTopText, frames.ilvlText, frames.defaultTalentText)
     end
     
     function frames:SetSlot(slotId, itemLink, itemTexture)
@@ -537,9 +560,10 @@ local function initItemFrames(parentRegion)
         frames[slotId]:SetItemTexture(itemTexture)
     end
     
-    function frames:SetText(topText, bottomText)
+    function frames:SetText(topText, ilvlText, talentText)
         frames.topText:SetText(topText)
-        frames.bottomText:SetText(bottomText)
+        frames.ilvlText:SetText(ilvlText)
+        frames.talentText:SetText(talentText)
     end
     
     return frames
@@ -547,7 +571,7 @@ end
 
 --- Clear/hide any frames that previously existed
 --- @param frames table the "GearCheckAura.FRAME.frames" table which contains all of the UI frames.
-local function clearFrames(frames)
+function GearCheckAura:clearFrames(frames)
     for i, f in ipairs(frames) do
         f:Hide()
         f:SetScript("OnClick", nil)
@@ -564,20 +588,19 @@ local function clearFrames(frames)
 end
 
 --- Load up the item frames attached to the WA region, but only if they don't already exist
-local function loadFrames()
-    local GCWA = GetGCWA()
+function GearCheckAura:loadFrames()
     -- check if there's any existing frames, clear them if so
     local existingFrames = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
     if (existingFrames ~= nil) then
-        GCWA.env:log("Clearing previous GearCheckWA frames")
-        clearFrames(existingFrames.frames)
+        self.env:log("Clearing previous GearCheckWA frames")
+        self:clearFrames(existingFrames.frames)
     end
 
     -- reset the frame context and create new frames
     _G[GLOBAL_GEARCHECK_FRAMES_KEY] = { }
-    GCWA.FRAME = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
-    GCWA.FRAME.parent = GCWA.env.region
-    GCWA.FRAME.frames = initItemFrames(GCWA.env.region)
+    self.FRAME = _G[GLOBAL_GEARCHECK_FRAMES_KEY]
+    self.FRAME.parent = self.env.region
+    self.FRAME.frames = self:initItemFrames(self.env.region)
 end
 
 -- Initialize the Addon
@@ -596,11 +619,11 @@ local function loadAddon()
     AceSerializer:Embed(GCWA.env.GEAR_CHECK)
     
     -- register event channels
-    GCWA.env.GEAR_CHECK:RegisterComm(REQUEST_MSG_PREFIX, handleEquippedItemsRequest)
-    GCWA.env.GEAR_CHECK:RegisterComm(RESPOND_MSG_PREFIX, handleEquippedItemsResponse)
+    GCWA.env.GEAR_CHECK:RegisterComm(REQUEST_MSG_PREFIX, GCWA.requestCommEntry)
+    GCWA.env.GEAR_CHECK:RegisterComm(RESPOND_MSG_PREFIX, GCWA.responseCommEntry)
     
     -- set up the handler for clicking the chat links
-    hooksecurefunc("SetItemRef", handleChatLinkClick)
+    hooksecurefunc("SetItemRef", GCWA.chatLinkClickEntry)
     
     -- filter chat links into our clickable format
     ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", chatLinkFilter)
@@ -616,16 +639,16 @@ local function loadAddon()
     ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT", chatLinkFilter)
     ChatFrame_AddMessageEventFilter("CHAT_MSG_INSTANCE_CHAT_LEADER", chatLinkFilter)
     
-    loadFrames()
+    GCWA:loadFrames()
 end
 
 local loadedAddon = _G[GLOBAL_GEARCHECK_ADDON_KEY]
 
 if (loadedAddon ~= nil) then
     GearCheckAura.env.GEAR_CHECK = loadedAddon
-    makeFrameMovable(GearCheckAura.env.region)
-    loadSavedPoint(GearCheckAura.env.region)
-    loadFrames()
+    GearCheckAura:makeFrameMovable(GearCheckAura.env.region)
+    GearCheckAura:loadSavedPoint(GearCheckAura.env.region)
+    GearCheckAura:loadFrames()
 else
     loadAddon()
 end
