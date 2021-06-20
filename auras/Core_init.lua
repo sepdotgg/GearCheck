@@ -22,6 +22,51 @@ local GearCheckAura = _G[GLOBAL_GEARCHECK_WA_KEY]
 
 GearCheckAura.env = aura_env
 
+-- Scoped variables
+
+--- Valid Max Levels based on the expansion ID from GetExpansionLevel()
+GearCheckAura.MAX_LEVEL = {
+    [0] = 60,
+    [1] = 70,
+    [2] = 80,
+    [3] = 85,
+    [4] = 90,
+    [5] = 100,
+    [6] = 110,
+    [7] = 120,
+    [8] = 60
+}
+
+--- Valid Slot IDs for each Item Equipment Type
+GearCheckAura.ITEM_EQUIP_LOCS = {
+    ["INVTYPE_AMMO"] = {0},
+    ["INVTYPE_HEAD"] = {1},
+    ["INVTYPE_NECK"] = {2},
+    ["INVTYPE_SHOULDER"] = {3},
+    ["INVTYPE_BODY"] = {4},
+    ["INVTYPE_CHEST"] = {5},
+    ["INVTYPE_ROBE"] = {5},
+    ["INVTYPE_WAIST"] = {6},
+    ["INVTYPE_LEGS"] = {7},
+    ["INVTYPE_FEET"] = {8},
+    ["INVTYPE_WRIST"] = {9},
+    ["INVTYPE_HAND"] = {10},
+    ["INVTYPE_FINGER"] = {11, 12},
+    ["INVTYPE_TRINKET"] = {13, 14},
+    ["INVTYPE_CLOAK"] = {15},
+    ["INVTYPE_WEAPON"] = {16, 17},
+    ["INVTYPE_SHIELD"] = {17},
+    ["INVTYPE_2HWEAPON"] = {16},
+    ["INVTYPE_WEAPONMAINHAND"] = {16},
+    ["INVTYPE_WEAPONOFFHAND"] = {17},
+    ["INVTYPE_HOLDABLE"] = {17},
+    ["INVTYPE_RANGED"] = {18},
+    ["INVTYPE_THROWN"] = {18},
+    ["INVTYPE_RANGEDRIGHT"] = {18},
+    ["INVTYPE_RELIC"] = {18},
+    ["INVTYPE_TABARD"] = {19},
+}
+
 GearCheckAura.env.lastIncomingRequest = { }
 GearCheckAura.env.lastOutgoingRequest = { }
 GearCheckAura.env.pendingTokens = { }
@@ -63,6 +108,43 @@ function GearCheckAura:randomString(len)
         str = str .. char
     end
     return str
+end
+
+--- Wraps text in red for error/warning messages.
+--- @param text string The text to wrap in red color
+function GearCheckAura:errorText(text)
+    return WrapTextInColorCode(text, "FFFF0000")
+end
+
+--- Wraps text in GearCheck blue color
+--- @param text string The text to wrap in GearCheck blue color
+function GearCheckAura:gearCheckColor(text)
+    return WrapTextInColorCode(text, "FF00BFFF")
+end
+
+--- Checks if an item received from someone's gear check matches the slot that item is supposed to go in
+--- Helps mitigate bad actors modifying their end of the code to send invalid item data for slots
+--- @param itemEquipLoc string The item's equip location, as determined from GetItemInfo
+--- @param slotId The slot ID the item is "supposed" to go in
+function GearCheckAura:isItemValid(itemEquipLoc, slotId)
+    local validLevels = self.ITEM_EQUIP_LOCS[itemEquipLoc]
+    if (validLevels == nil) then
+        return false
+    end
+    for i, validSlot in ipairs(validLevels) do
+        if (validSlot == slotId) then
+            return true
+        end
+    end
+    return false
+end
+
+--- Simple check to see if the player's level data received is within the range of valid levels and is an integer
+--- @param playerLevel number The player's level received from the gear check response
+function GearCheckAura:isPlayerLevelValid(playerLevel)
+    local currentExpansion = GetExpansionLevel()
+    local maxLevel = self.MAX_LEVEL[currentExpansion]
+    return (playerLevel <= maxLevel and playerLevel >= 1 and math.floor(playerLevel) == playerLevel)
 end
 
 --- Generates a new request token for the target character name
@@ -354,6 +436,12 @@ function GearCheckAura:displayEquippedItems(characterInfo, equippedItemsTable)
     local level = characterInfo["level"]
     local ilvl = characterInfo["ilvl"]
     local talents = characterInfo["talents"]
+
+    if (not self:isPlayerLevelValid(level)) then
+        self.env:log("Invalid level received from: " .. name .. ", level: " .. (level or "nil"))
+        print(self:gearCheckColor("GearCheck: ") .. self:errorText("WARNING") .. ": The response received from \"" .. name .. "\" contains invalid or tampered data and and could not be confirmed.")
+        PlaySound(5274)
+    end
     
     local topText = name
     if class and level then
@@ -389,7 +477,17 @@ function GearCheckAura:displayEquippedItems(characterInfo, equippedItemsTable)
         end
     end
     
+    local haveShownEquipWarning = false
+
     for i, v in pairs(equippedItemsTable) do
+        local itemEquipLoc = select(9, GetItemInfo(v[0]))
+        if (itemEquipLoc ~= nil and not self:isItemValid(itemEquipLoc, i) and not haveShownEquipWarning) then
+            self.env:log("Invalid level received from: " .. name .. ", itemEquipLoc: " .. itemEquipLoc .. " for slot ID " .. i)
+            print(self:gearCheckColor("GearCheck: ") .. self:errorText("WARNING") .. ": The response received from \"" .. name .. "\" contains invalid or tampered data and and could not be confirmed.")
+            haveShownEquipWarning = true
+            PlaySound(5274)
+        end
+
         self.FRAME.frames:SetSlot(i, v[0], v[1])
     end
     self.FRAME.frames:SetText(topText, bottomText, talentText, gearScoreText)
