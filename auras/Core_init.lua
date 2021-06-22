@@ -139,6 +139,39 @@ function GearCheckAura:isItemValid(itemEquipLoc, slotId)
     return false
 end
 
+--- Checks if the talents received from someone's gear check are possible
+--- @param playerLevel number The player's current level.
+--- @param t1 number Number of talent points in Tree 1
+--- @param t2 number Number of talent points in Tree 2
+--- @param t3 number Number of talent points in Tree 3
+--- @return boolean Whether the talent points provided are possible
+function GearCheckAura:isTalentsValid(playerLevel, t1, t2, t3)
+    -- only do this check on < MoP
+    local currentExpansion = GetExpansionLevel()
+    if currentExpansion >= 4 then
+        return true
+    end
+
+    -- non-integers
+    if (math.floor(t1) ~= t1 or math.floor(t2) ~= t2 or math.floor(t3) ~= t3) then
+        return false
+    end
+
+    -- negative numbers
+    if (t1 < 0 or t2 < 0 or t3 < 0) then
+        return false
+    end
+
+    -- talents before level 10
+    if (playerLevel < 10 and (t1 + t2 + t3) > 0) then
+        return false
+    end
+
+    local maxLevel = self.MAX_LEVEL[currentExpansion]
+    local maxPossible = playerLevel - 9
+    return (t1 + t2 + t3) <= maxPossible
+end
+
 --- Simple check to see if the player's level data received is within the range of valid levels and is an integer
 --- @param playerLevel number The player's level received from the gear check response
 function GearCheckAura:isPlayerLevelValid(playerLevel)
@@ -439,6 +472,12 @@ function GearCheckAura:displayEquippedItems(characterInfo, equippedItemsTable)
 
     if (not self:isPlayerLevelValid(level)) then
         self.env:log("Invalid level received from: " .. name .. ", level: " .. (level or "nil"))
+        print(self:gearCheckColor("GearCheck: ") .. self:errorText("WARNING") .. ": The response received from \"" .. name .. "\" contains invalid or tampered data and and could not be confirmed.")
+        PlaySound(5274)
+    end
+
+    if (not self:isTalentsValid(level, talents[1], talents[2], talents[3])) then
+        self.env:log("Invalid talents received from: " .. name .. ", total talents: " .. (talents[1] + talents[2] + talents[3]))
         print(self:gearCheckColor("GearCheck: ") .. self:errorText("WARNING") .. ": The response received from \"" .. name .. "\" contains invalid or tampered data and and could not be confirmed.")
         PlaySound(5274)
     end
