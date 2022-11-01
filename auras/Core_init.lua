@@ -10,7 +10,6 @@ local CHAT_LINK_TEMPLATE = "|H%s:%s|h|cFF00BFFF[GearCheck: %s]|h|r"
 local EXTRACT_CHAR_NAME_PATTERN = "%[GearCheck: ([^%s]+)%]"
 local EQUIPPED_ITEMS_ACTION = "EQUIPPED_ITEMS"
 local EQUIPPED_ITEMS_ACTION_PATTERN = "EQUIPPED_ITEMS:([^%s]+)"
-local SAVED_VARIABLES_KEY = "GCWA_POINT"
 local GLOBAL_GEARCHECK_ADDON_KEY = "GearCheckWA_Addon"
 local GLOBAL_GEARCHECK_FRAMES_KEY = "GearCheckWA_Frames"
 local GLOBAL_GEARCHECK_WA_KEY = "GearCheckWA_Aura"
@@ -257,13 +256,13 @@ function GearCheckAura:savePoint(frame)
     pos.xOfs = xOfs
     pos.yOfs = yOfs
     
-    WeakAurasSaved[SAVED_VARIABLES_KEY] = pos
+    self.env.saved = pos
 end
 
 --- Loads the main frame's saved position from Saved Variables and applies that position to the provied frame
 --- @param frame table The frame to have its position set
 function GearCheckAura:loadSavedPoint(frame)
-    local savedPoint = WeakAurasSaved[SAVED_VARIABLES_KEY]
+    local savedPoint = self.env.saved
     if (savedPoint ~= nil) then
         frame:SetPoint(savedPoint.point, UIParent, savedPoint.relativePoint, savedPoint.xOfs, savedPoint.yOfs)
     end
